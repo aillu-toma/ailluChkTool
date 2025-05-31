@@ -119,6 +119,62 @@ h2 {
     margin-bottom: 1rem;
 }
 
+.error-list {
+    margin-top: 1rem;
+}
+
+.error-date-group {
+    margin-bottom: 1.5rem;
+    border-left: 4px solid #e74c3c;
+    padding-left: 1rem;
+}
+
+.error-date {
+    color: #2c3e50;
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #eee;
+}
+
+.error-items {
+    list-style: none;
+    padding: 0;
+}
+
+.error-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem;
+    background-color: #fff;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.error-type {
+    color: #e74c3c;
+    font-weight: bold;
+    min-width: 150px;
+}
+
+.error-name {
+    color: #2c3e50;
+    font-weight: bold;
+    min-width: 120px;
+}
+
+.error-hours {
+    color: #e67e22;
+}
+
+.error-time {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+}
+
 @media (max-width: 768px) {
     .container {
         padding: 1rem;
@@ -126,5 +182,15 @@ h2 {
     
     .checkbox-group {
         grid-template-columns: 1fr;
+    }
+
+    .error-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .error-type, .error-name {
+        min-width: auto;
     }
 } 
