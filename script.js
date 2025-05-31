@@ -49,36 +49,77 @@ async function readCSV(file) {
     });
 }
 
+// ヘッダー行から項目の位置を取得
+function getColumnIndex(header, columnName) {
+    const index = header.findIndex(col => col.trim() === columnName);
+    if (index === -1) {
+        throw new Error(`項目 "${columnName}" が見つかりません`);
+    }
+    return index;
+}
+
+// 日次データの項目位置を取得
+function getDailyDataColumns(header) {
+    return {
+        employeeCode: getColumnIndex(header, '社員コード'),
+        employeeName: getColumnIndex(header, '社員氏名（漢字）'),
+        date: getColumnIndex(header, '年月日'),
+        workType: getColumnIndex(header, '勤務区分'),
+        workTypeName: getColumnIndex(header, '勤務区分名称（漢字）'),
+        startTime: getColumnIndex(header, '就業開始時刻'),
+        endTime: getColumnIndex(header, '就業終了時刻'),
+        vacationCode: getColumnIndex(header, '休暇コード'),
+        vacationName: getColumnIndex(header, '休暇コード名称'),
+        workHours: getColumnIndex(header, '実働時間'),
+        flexTime: getColumnIndex(header, 'フレックス対象時間差'),
+        comment: getColumnIndex(header, 'コメント')
+    };
+}
+
+// 届け出データの項目位置を取得
+function getApplicationDataColumns(header) {
+    return {
+        employeeCode: getColumnIndex(header, '社員コード'),
+        employeeName: getColumnIndex(header, '社員氏名（漢字）'),
+        applicationType: getColumnIndex(header, '届出区分'),
+        applicationName: getColumnIndex(header, '届出略称'),
+        date: getColumnIndex(header, '対象年月日'),
+        vacationName: getColumnIndex(header, '休暇名称（漢字）'),
+        lateNightOvertime: getColumnIndex(header, '深夜外残業時間'),
+        lateNightWork: getColumnIndex(header, '深夜残業時間')
+    };
+}
+
 // 残業申請チェック
-function checkOvertime(dailyData, applicationData) {
+function checkOvertime(dailyData, applicationData, dailyColumns, appColumns) {
     const errors = [];
 
     // 日次データから残業時間が8時間を超えるレコードを抽出
     const overtimeRecords = dailyData.filter(record => {
-        const workType = record[4]; // 勤務区分
-        const workHours = parseFloat(record[10]); // 実働時間
+        const workType = record[dailyColumns.workType];
+        const workHours = parseFloat(record[dailyColumns.workHours]);
         return workType === 'EFS01' && workHours > 8;
     });
 
     // 各残業レコードに対して届け出データの確認
     overtimeRecords.forEach(record => {
-        const employeeCode = record[0]; // 社員コード
-        const date = record[2]; // 年月日
+        const employeeCode = record[dailyColumns.employeeCode];
+        const date = record[dailyColumns.date];
 
         // 届け出データから該当するレコードを検索
         const application = applicationData.find(app => 
-            app[0] === employeeCode && // 社員コード
-            app[4] === date && // 対象年月日
-            app[2] === '80' // 届出区分
+            app[appColumns.employeeCode] === employeeCode &&
+            app[appColumns.date] === date &&
+            app[appColumns.applicationType] === '80'
         );
 
         if (!application) {
             errors.push({
                 type: '残業申請未提出',
                 employeeCode: employeeCode,
-                employeeName: record[1], // 社員氏名
+                employeeName: record[dailyColumns.employeeName],
                 date: date,
-                workHours: record[10]
+                workHours: record[dailyColumns.workHours]
             });
         }
     });
@@ -87,32 +128,32 @@ function checkOvertime(dailyData, applicationData) {
 }
 
 // 在宅勤務チェック
-function checkRemoteWork(dailyData, applicationData) {
+function checkRemoteWork(dailyData, applicationData, dailyColumns, appColumns) {
     const errors = [];
 
     // 日次データから在宅勤務のレコードを抽出
     const remoteRecords = dailyData.filter(record => {
-        const workType = record[4]; // 勤務区分
-        return workType === 'EFS02'; // 在宅勤務の区分コード
+        const workType = record[dailyColumns.workType];
+        return workType === 'EFS02';
     });
 
     // 各在宅勤務レコードに対して届け出データの確認
     remoteRecords.forEach(record => {
-        const employeeCode = record[0];
-        const date = record[2];
+        const employeeCode = record[dailyColumns.employeeCode];
+        const date = record[dailyColumns.date];
 
         // 届け出データから該当するレコードを検索
         const application = applicationData.find(app => 
-            app[0] === employeeCode &&
-            app[4] === date &&
-            app[2] === '70' // 在宅勤務の届出区分
+            app[appColumns.employeeCode] === employeeCode &&
+            app[appColumns.date] === date &&
+            app[appColumns.applicationType] === '70'
         );
 
         if (!application) {
             errors.push({
                 type: '在宅勤務届出未提出',
                 employeeCode: employeeCode,
-                employeeName: record[1],
+                employeeName: record[dailyColumns.employeeName],
                 date: date
             });
         }
@@ -122,35 +163,35 @@ function checkRemoteWork(dailyData, applicationData) {
 }
 
 // 在宅残業チェック
-function checkRemoteOvertime(dailyData, applicationData) {
+function checkRemoteOvertime(dailyData, applicationData, dailyColumns, appColumns) {
     const errors = [];
 
     // 日次データから在宅残業のレコードを抽出
     const remoteOvertimeRecords = dailyData.filter(record => {
-        const workType = record[4]; // 勤務区分
-        const workHours = parseFloat(record[10]); // 実働時間
-        return workType === 'EFS02' && workHours > 8; // 在宅勤務で8時間超
+        const workType = record[dailyColumns.workType];
+        const workHours = parseFloat(record[dailyColumns.workHours]);
+        return workType === 'EFS02' && workHours > 8;
     });
 
     // 各在宅残業レコードに対して届け出データの確認
     remoteOvertimeRecords.forEach(record => {
-        const employeeCode = record[0];
-        const date = record[2];
+        const employeeCode = record[dailyColumns.employeeCode];
+        const date = record[dailyColumns.date];
 
         // 届け出データから該当するレコードを検索
         const application = applicationData.find(app => 
-            app[0] === employeeCode &&
-            app[4] === date &&
-            app[2] === '75' // 在宅残業の届出区分
+            app[appColumns.employeeCode] === employeeCode &&
+            app[appColumns.date] === date &&
+            app[appColumns.applicationType] === '75'
         );
 
         if (!application) {
             errors.push({
                 type: '在宅残業届出未提出',
                 employeeCode: employeeCode,
-                employeeName: record[1],
+                employeeName: record[dailyColumns.employeeName],
                 date: date,
-                workHours: record[10]
+                workHours: record[dailyColumns.workHours]
             });
         }
     });
@@ -159,36 +200,36 @@ function checkRemoteOvertime(dailyData, applicationData) {
 }
 
 // 深夜勤務チェック
-function checkLateNightWork(dailyData, applicationData) {
+function checkLateNightWork(dailyData, applicationData, dailyColumns, appColumns) {
     const errors = [];
 
     // 日次データから深夜勤務のレコードを抽出
     const lateNightRecords = dailyData.filter(record => {
-        const startTime = record[6]; // 就業開始時刻
-        const endTime = record[7]; // 就業終了時刻
+        const startTime = record[dailyColumns.startTime];
+        const endTime = record[dailyColumns.endTime];
         return isLateNightWork(startTime, endTime);
     });
 
     // 各深夜勤務レコードに対して届け出データの確認
     lateNightRecords.forEach(record => {
-        const employeeCode = record[0];
-        const date = record[2];
+        const employeeCode = record[dailyColumns.employeeCode];
+        const date = record[dailyColumns.date];
 
         // 届け出データから該当するレコードを検索
         const application = applicationData.find(app => 
-            app[0] === employeeCode &&
-            app[4] === date &&
-            app[2] === '85' // 深夜勤務の届出区分
+            app[appColumns.employeeCode] === employeeCode &&
+            app[appColumns.date] === date &&
+            app[appColumns.applicationType] === '85'
         );
 
         if (!application) {
             errors.push({
                 type: '深夜勤務届出未提出',
                 employeeCode: employeeCode,
-                employeeName: record[1],
+                employeeName: record[dailyColumns.employeeName],
                 date: date,
-                startTime: record[6],
-                endTime: record[7]
+                startTime: record[dailyColumns.startTime],
+                endTime: record[dailyColumns.endTime]
             });
         }
     });
@@ -213,14 +254,14 @@ function isLateNightWork(startTime, endTime) {
 }
 
 // 打刻忘れコメントチェック
-function checkMissingPunchComment(dailyData) {
+function checkMissingPunchComment(dailyData, dailyColumns) {
     const errors = [];
 
     // 日次データから打刻忘れの可能性があるレコードを抽出
     const missingPunchRecords = dailyData.filter(record => {
-        const startTime = record[6]; // 就業開始時刻
-        const endTime = record[7]; // 就業終了時刻
-        const comment = record[12]; // コメント
+        const startTime = record[dailyColumns.startTime];
+        const endTime = record[dailyColumns.endTime];
+        const comment = record[dailyColumns.comment];
         return (!startTime || !endTime) && !comment;
     });
 
@@ -228,11 +269,11 @@ function checkMissingPunchComment(dailyData) {
     missingPunchRecords.forEach(record => {
         errors.push({
             type: '打刻忘れコメント未入力',
-            employeeCode: record[0],
-            employeeName: record[1],
-            date: record[2],
-            startTime: record[6],
-            endTime: record[7]
+            employeeCode: record[dailyColumns.employeeCode],
+            employeeName: record[dailyColumns.employeeName],
+            date: record[dailyColumns.date],
+            startTime: record[dailyColumns.startTime],
+            endTime: record[dailyColumns.endTime]
         });
     });
 
@@ -255,39 +296,43 @@ async function performChecks() {
         const dailyData = await readCSV(dailyDataFile);
         const applicationData = await readCSV(applicationDataFile);
 
-        // ヘッダー行を除去
-        dailyData.shift();
-        applicationData.shift();
+        // ヘッダー行を取得
+        const dailyHeader = dailyData.shift();
+        const appHeader = applicationData.shift();
+
+        // 項目位置を取得
+        const dailyColumns = getDailyDataColumns(dailyHeader);
+        const appColumns = getApplicationDataColumns(appHeader);
 
         let allErrors = [];
 
         // 残業申請チェック
         if (document.getElementById('overtimeCheck').checked) {
-            const overtimeResults = checkOvertime(dailyData, applicationData);
+            const overtimeResults = checkOvertime(dailyData, applicationData, dailyColumns, appColumns);
             allErrors = allErrors.concat(overtimeResults.errors);
         }
 
         // 在宅勤務チェック
         if (document.getElementById('remoteCheck').checked) {
-            const remoteResults = checkRemoteWork(dailyData, applicationData);
+            const remoteResults = checkRemoteWork(dailyData, applicationData, dailyColumns, appColumns);
             allErrors = allErrors.concat(remoteResults.errors);
         }
 
         // 在宅残業チェック
         if (document.getElementById('remoteOvertimeCheck').checked) {
-            const remoteOvertimeResults = checkRemoteOvertime(dailyData, applicationData);
+            const remoteOvertimeResults = checkRemoteOvertime(dailyData, applicationData, dailyColumns, appColumns);
             allErrors = allErrors.concat(remoteOvertimeResults.errors);
         }
 
         // 深夜勤務チェック
         if (document.getElementById('lateNightCheck').checked) {
-            const lateNightResults = checkLateNightWork(dailyData, applicationData);
+            const lateNightResults = checkLateNightWork(dailyData, applicationData, dailyColumns, appColumns);
             allErrors = allErrors.concat(lateNightResults.errors);
         }
 
         // 打刻忘れコメントチェック
         if (document.getElementById('commentCheck').checked) {
-            const commentResults = checkMissingPunchComment(dailyData);
+            const commentResults = checkMissingPunchComment(dailyData, dailyColumns);
             allErrors = allErrors.concat(commentResults.errors);
         }
 
