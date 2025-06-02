@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>勤怠チェックツール</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>勤怠チェックツール</h1>
+        
+        <div class="file-upload-section">
+            <div class="file-input-group">
+                <label for="dailyData">日次データ（CSV）:</label>
+                <input type="file" id="dailyData" accept=".csv">
+            </div>
+            
+            <div class="file-input-group">
+                <label for="applicationData">届け出データ（CSV）:</label>
+                <input type="file" id="applicationData" accept=".csv">
+            </div>
+        </div>
+
+        <div class="check-options">
+            <h2>チェック項目</h2>
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" id="overtimeCheck" checked>
+                    残業申請チェック
+                </label>
+                <label>
+                    <input type="checkbox" id="remoteCheck" checked>
+                    在宅勤務チェック
+                </label>
+                <label>
+                    <input type="checkbox" id="remoteOvertimeCheck" checked>
+                    在宅残業チェック
+                </label>
+                <label>
+                    <input type="checkbox" id="lateNightCheck" checked>
+                    深夜勤務チェック
+                </label>
+                <label>
+                    <input type="checkbox" id="commentCheck" checked>
+                    打刻忘れコメントチェック
+                </label>
+            </div>
+        </div>
+
+        <button id="checkButton" class="check-button">チェック実行</button>
+
+        <div class="results-section">
+            <h2>チェック結果</h2>
+            <div id="results" class="results-container">
+                <!-- 結果がここに表示されます -->
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html> 
