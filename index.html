@@ -24,27 +24,63 @@
 
         <div class="check-options">
             <h2>チェック項目</h2>
-            <div class="checkbox-group">
-                <label>
-                    <input type="checkbox" id="overtimeCheck" checked>
-                    残業申請チェック
-                </label>
-                <label>
-                    <input type="checkbox" id="remoteCheck" checked>
-                    在宅勤務チェック
-                </label>
-                <label>
-                    <input type="checkbox" id="remoteOvertimeCheck" checked>
-                    在宅残業チェック
-                </label>
-                <label>
-                    <input type="checkbox" id="lateNightCheck" checked>
-                    深夜勤務チェック
-                </label>
-                <label>
-                    <input type="checkbox" id="commentCheck" checked>
-                    打刻忘れコメントチェック
-                </label>
+            
+            <div class="check-category">
+                <h3>チェック0: 在宅か出社かチェック</h3>
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="workTypeCheck" checked>
+                        勤務区分チェック（EFS01/Z01）
+                    </label>
+                </div>
+            </div>
+
+            <div class="check-category">
+                <h3>チェック1: 残業関連チェック</h3>
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="overtimeCheck" checked>
+                        残業申請有無チェック
+                    </label>
+                    <label>
+                        <input type="checkbox" id="overtimeHoursCheck" checked>
+                        残業時間チェック
+                    </label>
+                </div>
+            </div>
+
+            <div class="check-category">
+                <h3>チェック2: 在宅残業関連チェック</h3>
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="remoteOvertimeCheck" checked>
+                        在宅残業申請チェック
+                    </label>
+                    <label>
+                        <input type="checkbox" id="remoteOvertimeHoursCheck" checked>
+                        在宅残業時間チェック
+                    </label>
+                </div>
+            </div>
+
+            <div class="check-category">
+                <h3>チェック3: 定時外勤務チェック</h3>
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="lateNightCheck" checked>
+                        深夜勤務（22時～5時）チェック
+                    </label>
+                </div>
+            </div>
+
+            <div class="check-category">
+                <h3>チェック4: 打刻忘れチェック</h3>
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="commentCheck" checked>
+                        打刻忘れ時コメント有無チェック
+                    </label>
+                </div>
             </div>
         </div>
 
