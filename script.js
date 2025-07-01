@@ -200,7 +200,7 @@ function checkOvertimeApplication(dailyData, applicationData, dailyColumns, appC
     return { errors };
 }
 
-// チェック1_1: 残業時間チェック（10分単位の誤差許容）
+// チェック1_1: 残業時間チェック（1分単位の誤差許容）
 function checkOvertimeHours(dailyData, applicationData, dailyColumns, appColumns) {
     const errors = [];
     // 残業申請（届出区分=80）があるもの
@@ -217,14 +217,14 @@ function checkOvertimeHours(dailyData, applicationData, dailyColumns, appColumns
             const actualWorkHours = parseFloat(dailyRecord[dailyColumns.workHours]) || 0;
             const overtimeHours = actualWorkHours - 8;
             if (overtimeHours > 0) {
-                // 10分単位の誤差許容
-                const expectedOvertimeMinutes = Math.round(overtimeHours * 60 / 10) * 10;
+                // 1分単位の誤差許容
+                const expectedOvertimeMinutes = Math.round(overtimeHours * 60);
                 // 申請値は深夜外残業＋深夜残業の合計
                 const lateNightOvertime = parseFloat(application[appColumns.lateNightOvertime]) || 0;
                 const lateNightWork = parseFloat(application[appColumns.lateNightWork]) || 0;
-                const actualOvertimeMinutes = Math.round((lateNightOvertime + lateNightWork) * 60 / 10) * 10;
+                const actualOvertimeMinutes = Math.round((lateNightOvertime + lateNightWork) * 60);
                 const timeDifference = Math.abs(expectedOvertimeMinutes - actualOvertimeMinutes);
-                if (timeDifference > 10) {
+                if (timeDifference > 1) {
                     errors.push({
                         type: '残業時間不一致',
                         employeeCode: employeeCode,
@@ -233,7 +233,7 @@ function checkOvertimeHours(dailyData, applicationData, dailyColumns, appColumns
                         workHours: actualWorkHours,
                         expectedOvertime: expectedOvertimeMinutes / 60,
                         actualOvertime: actualOvertimeMinutes / 60,
-                        detail: `期待残業時間: ${expectedOvertimeMinutes / 60}時間, 申請残業時間: ${actualOvertimeMinutes / 60}時間`
+                        detail: `期待残業時間: ${(expectedOvertimeMinutes / 60).toFixed(2)}時間, 申請残業時間: ${(actualOvertimeMinutes / 60).toFixed(2)}時間`
                     });
                 }
             }
@@ -274,7 +274,7 @@ function checkRemoteOvertimeApplication(dailyData, applicationData, dailyColumns
     return { errors };
 }
 
-// チェック2_1: 在宅残業時間チェック（10分単位の誤差許容）
+// チェック2_1: 在宅残業時間チェック（1分単位の誤差許容）
 function checkRemoteOvertimeHours(dailyData, applicationData, dailyColumns, appColumns) {
     const errors = [];
     // 在宅残業申請（届出区分=81）があるもの
@@ -291,14 +291,14 @@ function checkRemoteOvertimeHours(dailyData, applicationData, dailyColumns, appC
             const actualWorkHours = parseFloat(dailyRecord[dailyColumns.workHours]) || 0;
             const overtimeHours = actualWorkHours - 8;
             if (overtimeHours > 0) {
-                // 10分単位の誤差許容
-                const expectedOvertimeMinutes = Math.round(overtimeHours * 60 / 10) * 10;
+                // 1分単位の誤差許容
+                const expectedOvertimeMinutes = Math.round(overtimeHours * 60);
                 // 申請値は深夜外残業＋深夜残業の合計
                 const lateNightOvertime = parseFloat(application[appColumns.lateNightOvertime]) || 0;
                 const lateNightWork = parseFloat(application[appColumns.lateNightWork]) || 0;
-                const actualOvertimeMinutes = Math.round((lateNightOvertime + lateNightWork) * 60 / 10) * 10;
+                const actualOvertimeMinutes = Math.round((lateNightOvertime + lateNightWork) * 60);
                 const timeDifference = Math.abs(expectedOvertimeMinutes - actualOvertimeMinutes);
-                if (timeDifference > 10) {
+                if (timeDifference > 1) {
                     errors.push({
                         type: '在宅残業時間不一致',
                         employeeCode: employeeCode,
@@ -307,7 +307,7 @@ function checkRemoteOvertimeHours(dailyData, applicationData, dailyColumns, appC
                         workHours: actualWorkHours,
                         expectedOvertime: expectedOvertimeMinutes / 60,
                         actualOvertime: actualOvertimeMinutes / 60,
-                        detail: `期待在宅残業時間: ${expectedOvertimeMinutes / 60}時間, 申請在宅残業時間: ${actualOvertimeMinutes / 60}時間`
+                        detail: `期待在宅残業時間: ${(expectedOvertimeMinutes / 60).toFixed(2)}時間, 申請在宅残業時間: ${(actualOvertimeMinutes / 60).toFixed(2)}時間`
                     });
                 }
             }
@@ -338,25 +338,22 @@ function checkLateNightWork(dailyData, applicationData, dailyColumns, appColumns
             app[appColumns.date] === date
         );
         if (!application) return;
-        // ① 実働時間-8
-        const overtime = workHours - 8;
-        // ② 深夜外残業時間＋深夜残業時間
+        // ① 実働時間-8（1分単位で計算）
+        const overtimeMinutes = Math.round((workHours - 8) * 60);
+        // ② 深夜外残業時間＋深夜残業時間（1分単位で計算）
         const lateNightOvertime = parseFloat(application[appColumns.lateNightOvertime]) || 0;
         const lateNightWork = parseFloat(application[appColumns.lateNightWork]) || 0;
-        const applicationOvertime = lateNightOvertime + lateNightWork;
-        // 10分単位誤差許容
-        const overtimeMinutes = Math.round(overtime * 60 / 10) * 10;
-        const applicationOvertimeMinutes = Math.round(applicationOvertime * 60 / 10) * 10;
-        if (Math.abs(overtimeMinutes - applicationOvertimeMinutes) > 10) {
+        const applicationOvertimeMinutes = Math.round((lateNightOvertime + lateNightWork) * 60);
+        if (Math.abs(overtimeMinutes - applicationOvertimeMinutes) > 1) {
             errors.push({
                 type: '残業時間合計不一致',
                 employeeCode: employeeCode,
                 employeeName: record[dailyColumns.employeeName],
                 date: date,
                 workHours: workHours,
-                expectedOvertime: overtime,
-                actualOvertime: applicationOvertime,
-                detail: `期待残業時間: ${overtime}時間, 申請残業時間合計: ${applicationOvertime}時間`
+                expectedOvertime: overtimeMinutes / 60,
+                actualOvertime: applicationOvertimeMinutes / 60,
+                detail: `期待残業時間: ${(overtimeMinutes / 60).toFixed(2)}時間, 申請残業時間合計: ${(applicationOvertimeMinutes / 60).toFixed(2)}時間`
             });
         }
     });
@@ -365,18 +362,20 @@ function checkLateNightWork(dailyData, applicationData, dailyColumns, appColumns
         const endTime = record[dailyColumns.endTime];
         if (!endTime) return false;
         const [endHour, endMin] = endTime.split(':').map(Number);
-        return (endHour > 22 || (endHour === 22 && endMin > 0) || endHour < 5);
+        // 22:00 <= endTime < 29:00 (翌朝5:00)
+        const endMinutes = endHour * 60 + endMin;
+        return (endMinutes >= 22 * 60 || endMinutes < 5 * 60);
     });
     lateNightRecords.forEach(record => {
         const employeeCode = record[dailyColumns.employeeCode];
         const date = record[dailyColumns.date];
         const endTime = record[dailyColumns.endTime];
-        // 22:00以降の分数を計算
+        // 22:00以降の分数を計算（1分単位）
         let lateNightMinutes = 0;
         if (endTime) {
             let [endHour, endMin] = endTime.split(':').map(Number);
-            if (endHour < 5) endHour += 24; // 翌日5時まで対応
-            const endTotal = endHour * 60 + endMin;
+            let endTotal = endHour * 60 + endMin;
+            if (endTotal < 22 * 60) endTotal += 24 * 60; // 翌日5時まで対応
             const base = 22 * 60; // 22:00 in minutes
             if (endTotal > base) {
                 lateNightMinutes = endTotal - base;
@@ -388,10 +387,10 @@ function checkLateNightWork(dailyData, applicationData, dailyColumns, appColumns
             app[appColumns.date] === date
         );
         if (!application) return;
-        // 深夜残業時間（申請値）
+        // 深夜残業時間（申請値、1分単位）
         const lateNightWork = parseFloat(application[appColumns.lateNightWork]) || 0;
         const lateNightWorkMinutes = Math.round(lateNightWork * 60);
-        if (Math.abs(lateNightMinutes - lateNightWorkMinutes) > 10) { // 10分単位誤差許容
+        if (Math.abs(lateNightMinutes - lateNightWorkMinutes) > 1) {
             errors.push({
                 type: '深夜残業時間不一致',
                 employeeCode: employeeCode,
@@ -399,8 +398,8 @@ function checkLateNightWork(dailyData, applicationData, dailyColumns, appColumns
                 date: date,
                 endTime: endTime,
                 expectedLateNight: lateNightMinutes / 60,
-                actualLateNight: lateNightWork,
-                detail: `期待深夜残業時間: ${(lateNightMinutes / 60).toFixed(2)}時間, 申請深夜残業時間: ${lateNightWork}時間`
+                actualLateNight: lateNightWorkMinutes / 60,
+                detail: `期待深夜残業時間: ${(lateNightMinutes / 60).toFixed(2)}時間, 申請深夜残業時間: ${(lateNightWorkMinutes / 60).toFixed(2)}時間`
             });
         }
     });
