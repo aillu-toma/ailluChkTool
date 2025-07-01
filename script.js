@@ -120,6 +120,11 @@ function checkWorkType(dailyData, applicationData, dailyColumns, appColumns) {
         const date = record[dailyColumns.date];
         const employeeName = record[dailyColumns.employeeName];
 
+        // 勤務区分が空白の場合はスキップ
+        if (!workType || workType.trim() === '') {
+            return;
+        }
+
         if (workType === 'EFS01') {
             // 出社の場合、チェック1の対象とする
             check1Targets.push(record);
@@ -166,6 +171,10 @@ function checkOvertimeApplication(dailyData, applicationData, dailyColumns, appC
     const overtimeRecords = dailyData.filter(record => {
         const workType = record[dailyColumns.workType];
         const workHours = parseFloat(record[dailyColumns.workHours]) || 0;
+        // 勤務区分がZで始まる場合はスキップ
+        if (workType && workType.startsWith('Z')) {
+            return false;
+        }
         return workType === 'EFS01' && workHours > 8;
     });
     overtimeRecords.forEach(record => {
