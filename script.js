@@ -1,3 +1,5 @@
+
+// ログ機能は削除
 // CSVファイルの読み込みと解析
 async function readCSV(file) {
     return new Promise((resolve, reject) => {
@@ -6,24 +8,24 @@ async function readCSV(file) {
             try {
                 // ArrayBufferとして読み込む
                 const arrayBuffer = event.target.result;
-                
+
                 // TextDecoderを使用してSJISからUTF-8に変換
                 const decoder = new TextDecoder('shift-jis');
                 const text = decoder.decode(arrayBuffer);
-                
+
                 // 改行コードを統一
                 const normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-                
+
                 // CSVとして解析
                 const rows = normalizedText.split('\n').map(row => {
                     // カンマで分割し、ダブルクォートで囲まれた値も正しく処理
                     const values = [];
                     let currentValue = '';
                     let inQuotes = false;
-                    
+
                     for (let i = 0; i < row.length; i++) {
                         const char = row[i];
-                        
+
                         if (char === '"') {
                             inQuotes = !inQuotes;
                         } else if (char === ',' && !inQuotes) {
@@ -34,10 +36,10 @@ async function readCSV(file) {
                         }
                     }
                     values.push(currentValue);
-                    
+
                     return values;
                 });
-                
+
                 resolve(rows);
             } catch (error) {
                 reject(new Error('ファイルの読み込みに失敗しました: ' + error.message));
@@ -65,6 +67,8 @@ function getDailyDataColumns(header) {
         workTypeName: getColumnIndex(header, '勤務区分名称（漢字）'),
         startTime: getColumnIndex(header, '就業開始時刻'),
         endTime: getColumnIndex(header, '就業終了時刻'),
+        punchStart: getColumnIndex(header, '打刻時間開始'),
+        punchEnd: getColumnIndex(header, '打刻時間終了'),
         vacationCode: getColumnIndex(header, '休暇コード'),
         vacationName: getColumnIndex(header, '休暇コード名称'),
         workHours: getColumnIndex(header, '実働時間'),
@@ -91,14 +95,14 @@ function getApplicationDataColumns(header) {
 // 時間を分に変換（小数点形式から）
 function convertTimeToMinutes(timeValue) {
     if (!timeValue || timeValue === '') return 0;
-    
+
     const time = parseFloat(timeValue);
     if (isNaN(time)) return 0;
-    
+
     // 小数点以下は10分単位（0.1 = 6分）
     const hours = Math.floor(time);
     const minutes = Math.round((time - hours) * 60);
-    
+
     return hours * 60 + minutes;
 }
 
@@ -110,6 +114,7 @@ function convertMinutesToTime(minutes) {
 }
 
 // 60進数形式の時間（例: 0.3=30分, 0.15=15分）を分に変換する関数
+// 60進数形式の時間（例: 0.4=40分, 0.15=15分）を分に変換する関数
 function convert60TimeToMinutes(timeValue) {
     if (!timeValue || timeValue === '') return 0;
     const time = parseFloat(timeValue);
@@ -117,6 +122,26 @@ function convert60TimeToMinutes(timeValue) {
     const hours = Math.floor(time);
     const minutes = Math.round((time - hours) * 100);
     return hours * 60 + minutes;
+}
+
+// hmm形式（例: 900, 1830, 705）を分に変換する関数
+function hmmToMinutes(hmm) {
+    if (!hmm || hmm === '') return null;
+    // 文字列の場合は数値化
+    const str = hmm.toString().replace(/[^0-9]/g, '');
+    if (str.length < 3) return null;
+    let hour, min;
+    if (str.length === 3) {
+        hour = parseInt(str[0], 10);
+        min = parseInt(str.slice(1, 3), 10);
+    } else if (str.length === 4) {
+        hour = parseInt(str.slice(0, 2), 10);
+        min = parseInt(str.slice(2, 4), 10);
+    } else {
+        return null;
+    }
+    if (isNaN(hour) || isNaN(min)) return null;
+    return hour * 60 + min;
 }
 
 // チェック0: 在宅か出社かチェック
@@ -137,28 +162,43 @@ function checkWorkType(dailyData, applicationData, dailyColumns, appColumns) {
         }
 
         if (workType === 'EFS01') {
-            // 出社の場合、チェック1の対象とする
-            check1Targets.push(record);
-        } else if (workType === 'Z01') {
-            // 在宅の場合、届出区分=85の確認
-            const application = applicationData.find(app => 
+            // 出社の場合、届出区分=85があればエラー、なければチェック1対象
+            const application85 = applicationData.find(app =>
                 app[appColumns.employeeCode] === employeeCode &&
                 app[appColumns.date] === date &&
                 app[appColumns.applicationType] === '85'
             );
-
-            if (application) {
-                // 届出区分=85がある場合、チェック2の対象とする
-                check2Targets.push(record);
+            if (application85) {
+                errors.push({
+                    type: '出社勤務に在宅届出有',
+                    employeeCode: employeeCode,
+                    employeeName: employeeName,
+                    date: date,
+                    detail: '勤務区分がEFS01ですが、届出区分=85の届出が存在します'
+                });
             } else {
+                check1Targets.push(record);
+            }
+        } else if (workType.startsWith('Z')) {
+            // 勤務区分がZで始まる場合
+            const application85 = applicationData.find(app =>
+                app[appColumns.employeeCode] === employeeCode &&
+                app[appColumns.date] === date &&
+                app[appColumns.applicationType] === '85'
+            );
+            if (!application85) {
                 errors.push({
                     type: '在宅勤務届出未提出',
                     employeeCode: employeeCode,
                     employeeName: employeeName,
                     date: date,
-                    detail: '在宅勤務（Z01）ですが、届出区分=85の届出が提出されていません'
+                    detail: `在宅勤務（${workType}）ですが、届出区分=85の届出が提出されていません`
                 });
+            } else if (workType === 'Z01') {
+                // Z01かつ届出区分=85がある場合のみチェック2対象
+                check2Targets.push(record);
             }
+            // Z01以外のZxxはチェック2対象にしない
         } else {
             // 上記以外はエラー
             errors.push({
@@ -167,7 +207,7 @@ function checkWorkType(dailyData, applicationData, dailyColumns, appColumns) {
                 employeeName: employeeName,
                 date: date,
                 workType: workType,
-                detail: `不正な勤務区分: ${workType}（EFS01またはZ01である必要があります）`
+                detail: `不正な勤務区分: ${workType}（EFS01またはZで始まる勤務区分である必要があります）`
             });
         }
     });
@@ -349,15 +389,10 @@ function checkLateNightWork(dailyData, applicationData, dailyColumns, appColumns
         const workHours = parseFloat(record[dailyColumns.workHours]) || 0;
         const workType = record[dailyColumns.workType];
         const endTime = record[dailyColumns.endTime];
+        // 残業時間合計チェックはEFS01のみ対象
+        if (workType !== 'EFS01') return;
         // 勤務区分ごとに対応する届け出区分を決定
-        let targetAppType = null;
-        if (workType === 'EFS01') {
-            targetAppType = '80';
-        } else if (workType === 'Z01') {
-            targetAppType = '81';
-        } else {
-            return; // その他はスキップ
-        }
+        let targetAppType = '80';
         // トランザクション: 社員コード＋対象年月日＋届け出区分が一致する申請を取得
         const application = applicationData.find(app =>
             app[appColumns.employeeCode] === employeeCode &&
@@ -371,16 +406,25 @@ function checkLateNightWork(dailyData, applicationData, dailyColumns, appColumns
         const lateNightOvertime = convert60TimeToMinutes(application[appColumns.lateNightOvertime]);
         const lateNightWork = convert60TimeToMinutes(application[appColumns.lateNightWork]);
         const applicationOvertimeMinutes = lateNightOvertime + lateNightWork;
-        if (Math.abs(overtimeMinutes - applicationOvertimeMinutes) > 1) {
+        // 既に同じ社員・日付で残業時間不一致エラーが出ていれば重複出力しない
+        const alreadyError = overtimeErrors && overtimeErrors.some(e =>
+            e.employeeCode === employeeCode &&
+            e.date === date &&
+            e.type === '残業時間不一致' &&
+            e.expectedOvertime === overtimeMinutes &&
+            e.actualOvertime === applicationOvertimeMinutes
+        );
+        if (Math.abs(overtimeMinutes - applicationOvertimeMinutes) > 1 && !alreadyError) {
             errors.push({
-                type: '残業時間合計不一致',
+                type: '残業時間不一致',
                 employeeCode: employeeCode,
                 employeeName: record[dailyColumns.employeeName],
                 date: date,
+                workType: workType,
                 workHours: workHours,
                 expectedOvertime: overtimeMinutes,
                 actualOvertime: applicationOvertimeMinutes,
-                detail: `期待残業時間: ${overtimeMinutes}分, 申請残業時間合計: ${applicationOvertimeMinutes}分`
+                detail: `期待残業時間: ${overtimeMinutes}分, 申請残業時間: ${applicationOvertimeMinutes}分`
             });
         }
     });
@@ -388,10 +432,9 @@ function checkLateNightWork(dailyData, applicationData, dailyColumns, appColumns
     const lateNightRecords = validRecords.filter(record => {
         const endTime = record[dailyColumns.endTime];
         if (!endTime) return false;
-        const [endHour, endMin] = endTime.split(':').map(Number);
+        const endMinutes = hmmToMinutes(endTime);
+        if (endMinutes === null) return false;
         // 22:00 <= endTime < 29:00 (翌朝5:00)
-        const endMinutes = endHour * 60 + endMin;
-        // 22:00～翌5:00の間のみ
         return (endMinutes >= 22 * 60 && endMinutes < 29 * 60);
     });
     lateNightRecords.forEach(record => {
@@ -401,8 +444,8 @@ function checkLateNightWork(dailyData, applicationData, dailyColumns, appColumns
         // 22:00以降の分数を計算（1分単位）
         let lateNightMinutes = 0;
         if (endTime) {
-            let [endHour, endMin] = endTime.split(':').map(Number);
-            let endTotal = endHour * 60 + endMin;
+            let endTotal = hmmToMinutes(endTime);
+            if (endTotal === null) endTotal = 0;
             if (endTotal < 22 * 60) endTotal += 24 * 60; // 翌日5時まで対応
             const base = 22 * 60; // 22:00 in minutes
             if (endTotal > base) {
@@ -419,15 +462,21 @@ function checkLateNightWork(dailyData, applicationData, dailyColumns, appColumns
         const lateNightWork = convert60TimeToMinutes(application[appColumns.lateNightWork]);
         const lateNightWorkMinutes = lateNightWork;
         if (Math.abs(lateNightMinutes - lateNightWorkMinutes) > 1) {
+            // 分→60進数（例: 7分→0.07）
+            function minutesTo60(minutes) {
+                const h = Math.floor(minutes / 60);
+                const m = minutes % 60;
+                return parseFloat(h + '.' + (m < 10 ? '0' : '') + m);
+            }
             errors.push({
                 type: '深夜残業時間不一致',
                 employeeCode: employeeCode,
                 employeeName: record[dailyColumns.employeeName],
                 date: date,
                 endTime: endTime,
-                expectedLateNight: lateNightMinutes / 60,
-                actualLateNight: lateNightWorkMinutes / 60,
-                detail: `期待深夜残業時間: ${(lateNightMinutes / 60).toFixed(2)}時間, 申請深夜残業時間: ${(lateNightWorkMinutes / 60).toFixed(2)}時間`
+                expectedLateNight: minutesTo60(lateNightMinutes),
+                actualLateNight: minutesTo60(lateNightWorkMinutes),
+                detail: `期待深夜残業時間: ${minutesTo60(lateNightMinutes)}時間, 申請深夜残業時間: ${minutesTo60(lateNightWorkMinutes)}時間`
             });
         }
     });
@@ -439,26 +488,32 @@ function checkMissingPunchComment(dailyData, dailyColumns, check0PassedEmployeeD
     const errors = [];
     dailyData.forEach(record => {
         const workType = record[dailyColumns.workType];
-        const approvalStatus = dailyColumns.approvalStatus !== undefined ? record[dailyColumns.approvalStatus] : undefined;
-        const vacationCode = dailyColumns.vacationCode !== undefined ? record[dailyColumns.vacationCode] : undefined;
-        if (!workType || workType.trim() === '' || (approvalStatus !== undefined && (!approvalStatus || approvalStatus.trim() === '')) || (vacationCode !== undefined && vacationCode.trim() !== '')) return; // 勤務区分空白、承認状況空白、または休暇コードが空白でない場合はスキップ
+        const approvalStatus = record[dailyColumns.approvalStatus];
+        const vacationCode = record[dailyColumns.vacationCode];
+        // スキップ条件
+        if (!workType || workType.trim() === '' || (approvalStatus !== undefined && (!approvalStatus || approvalStatus.trim() === '')) || (vacationCode !== undefined && vacationCode.trim() !== '')) return;
         const employeeCode = record[dailyColumns.employeeCode];
         const date = record[dailyColumns.date];
-        // チェック0をパスしたデータのみ対象
         if (!check0PassedEmployeeDates.has(`${employeeCode}_${date}`)) return;
-        const startTime = record[dailyColumns.startTime];
-        const endTime = record[dailyColumns.endTime];
+
+        // 判定対象カラムを「打刻時間開始」「打刻時間終了」に変更
+        const punchStartIdx = dailyColumns.punchStart;
+        const punchEndIdx = dailyColumns.punchEnd;
+        // カラムが未定義ならスキップ
+        if (punchStartIdx === -1 || punchEndIdx === -1) return;
+        const punchStart = record[punchStartIdx];
+        const punchEnd = record[punchEndIdx];
         const comment = record[dailyColumns.comment];
-        const isStartZero = (startTime && startTime.trim() === '0');
-        const isEndZero = (endTime && endTime.trim() === '0');
-        if ((isStartZero || isEndZero) && (!comment || comment.trim() === '')) {
+        const isPunchStartZero = (punchStart && punchStart.trim() === '0');
+        const isPunchEndZero = (punchEnd && punchEnd.trim() === '0');
+        if ((isPunchStartZero || isPunchEndZero) && (!comment || comment.trim() === '')) {
             errors.push({
                 type: '打刻忘れコメント未入力',
                 employeeCode: employeeCode,
                 employeeName: record[dailyColumns.employeeName],
                 date: date,
-                startTime: startTime,
-                endTime: endTime,
+                punchStart: punchStart,
+                punchEnd: punchEnd,
                 detail: '打刻時間が0ですが、コメントが入力されていません'
             });
         }
@@ -468,6 +523,7 @@ function checkMissingPunchComment(dailyData, dailyColumns, check0PassedEmployeeD
 
 // メインのチェック処理
 async function performChecks() {
+    // ログ機能は削除
     const dailyDataFile = document.getElementById('dailyData').files[0];
     const applicationDataFile = document.getElementById('applicationData').files[0];
     const resultsContainer = document.getElementById('results');
@@ -527,6 +583,8 @@ async function performChecks() {
         if (document.getElementById('overtimeHoursCheck').checked) {
             const overtimeHoursResults = checkOvertimeHours(dailyData, applicationData, dailyColumns, appColumns);
             allErrors = allErrors.concat(overtimeHoursResults.errors);
+            // 残業時間不一致エラーも重複判定用にovertimeErrorsへ追加
+            overtimeErrors = overtimeErrors.concat(overtimeHoursResults.errors);
         }
 
         // チェック2: 在宅残業申請チェック
@@ -555,6 +613,7 @@ async function performChecks() {
 
         // 結果の表示
         displayResults(allErrors, resultsContainer);
+        // ログ機能は削除済みのため、saveLogToFile呼び出しも削除
     } catch (error) {
         resultsContainer.innerHTML = `<div class="error-message">エラーが発生しました: ${error.message}</div>`;
     }
@@ -591,7 +650,7 @@ function displayErrorList(errors, type = 'error') {
     errors.sort((a, b) => a.date.localeCompare(b.date));
 
     let errorHtml = '<div class="error-list">';
-    
+
     // エラーを日付ごとにグループ化
     const errorsByDate = {};
     errors.forEach(error => {
@@ -606,7 +665,7 @@ function displayErrorList(errors, type = 'error') {
         errorHtml += `<div class="error-date-group ${type}-date-group">`;
         errorHtml += `<h5 class="error-date">${date}</h5>`;
         errorHtml += '<ul class="error-items">';
-        
+
         errorsByDate[date].forEach(error => {
             errorHtml += `<li class="error-item ${type}-item">`;
             errorHtml += `<span class="error-type">${error.type}</span>`;
@@ -628,7 +687,7 @@ function displayErrorList(errors, type = 'error') {
             }
             errorHtml += '</li>';
         });
-        
+
         errorHtml += '</ul></div>';
     });
 
@@ -638,3 +697,4 @@ function displayErrorList(errors, type = 'error') {
 
 // イベントリスナーの設定
 document.getElementById('checkButton').addEventListener('click', performChecks);
+
