@@ -136,7 +136,7 @@ function checkWorkType(dailyData, applicationData, dailyColumns, appColumns) {
             return;
         }
 
-        if (workType === 'EFS01') {
+        if (workType === 'EFS01' || workType === 'EFS03') {
             // 出社の場合、チェック1の対象とする
             check1Targets.push(record);
         } else if (workType === 'Z01') {
@@ -167,7 +167,7 @@ function checkWorkType(dailyData, applicationData, dailyColumns, appColumns) {
                 employeeName: employeeName,
                 date: date,
                 workType: workType,
-                detail: `不正な勤務区分: ${workType}（EFS01またはZ01である必要があります）`
+                detail: `不正な勤務区分: ${workType}（EFS01,EFS03またはZ01である必要があります）`
             });
         }
     });
@@ -178,7 +178,7 @@ function checkWorkType(dailyData, applicationData, dailyColumns, appColumns) {
 // チェック1: 残業申請有無チェック
 function checkOvertimeApplication(dailyData, applicationData, dailyColumns, appColumns) {
     const errors = [];
-    // マスタ: 勤務区分=EFS01 かつ 実働時間>8 の日付を取得
+    // マスタ: 勤務区分=EFS01orEFS03 かつ 実働時間>8 の日付を取得
     const overtimeRecords = dailyData.filter(record => {
         const workType = record[dailyColumns.workType];
         const workHours = parseFloat(record[dailyColumns.workHours]) || 0;
@@ -186,7 +186,7 @@ function checkOvertimeApplication(dailyData, applicationData, dailyColumns, appC
         if (workType && workType.startsWith('Z')) {
             return false;
         }
-        return workType === 'EFS01' && workHours > 8;
+        return (workType === 'EFS01' || workType === 'EFS03') && workHours > 8;
     });
     overtimeRecords.forEach(record => {
         const employeeCode = record[dailyColumns.employeeCode];
